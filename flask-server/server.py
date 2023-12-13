@@ -19,7 +19,7 @@ from langchain.retrievers import ContextualCompressionRetriever
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.retrievers.document_compressors import LLMChainExtractor
-
+from langchain.callbacks import get_openai_callback
 
 app = Flask(__name__)
 CORS(app)
@@ -34,6 +34,7 @@ def query_open_ai():
         prompt = json_payload['prompt']
     else:
         return 'Content-Type not supported'
+    
     llm = ChatOpenAI(temperature=0, model_name='gpt-3.5-turbo', openai_api_key=API_KEY, max_tokens=100)
     formatted_template = f'Answer like a Normal Person: {prompt}'
     response = llm([HumanMessage(content=formatted_template)])
@@ -70,7 +71,6 @@ def process_pdf():
             chunk_overlap=200
         )
         chunks = text_splitter.split_documents(pages)
-
         embeddings = OpenAIEmbeddings()
 
         vectordb = Chroma.from_documents(
@@ -90,14 +90,26 @@ def process_pdf():
             memory_key="chat_history", #chat history is a lsit of messages
             return_messages=True
         )
+        
         qa = ConversationalRetrievalChain.from_llm(
             llm,
             retriever=vectordb.as_retriever(search_type="similarity", search_kwargs={"k": 2}),
             memory=memory
         )
 
+        
+
         question= request.form.get('question')
-        result = qa({"question": question})
+        with get_openai_callback() as cb:
+            result = qa({"question": question})
+        print(cb)
+        # tokens_info = {
+        #     'tokens_used': cb.total_tokens,
+        #     'prompt_tokens': cb.prompt_tokens,
+        #     'completion_tokens': cb.completion_tokens,
+        #     'total_cost_usd': cb.total_cost
+        # }
+        # print(tokens_info)
         ans = result.get('answer')
         # print(result['answer'])
         # question="How much are they worth?"
@@ -183,12 +195,32 @@ def read_pdf():
         
         condense_question_prompt=dict(prompt = QA_CHAIN_PROMPT)
     )
-    question="How many programming assignments are there?"
-    result = qa({"question": question})
-    print(result['answer'])
-    question="How much are they worth?"
-    result = qa({"question": question})
-    print(result['answer'])
+    # question="How many programming assignments are there?"
+    # with get_openai_callback() as cb:
+    #     result = qa({"question": question})
+    # print(cb)
+    # tokens_info = {
+    #         'tokens_used': cb.total_tokens,
+    #         'prompt_tokens': cb.prompt_tokens,
+    #         'completion_tokens': cb.completion_tokens,
+    #         'total_cost_usd': cb.total_cost
+    #     }
+    # print("token1", tokens_info)
+    # print(result['answer'])
+    # print(result)
+    # question="How much are they worth?"
+    # with get_openai_callback() as cb3:
+    #     result = qa({"question": question})
+    # print("cb3", cb3)
+    # tokens_info = {
+    #         'tokens_used': cb.total_tokens,
+    #         'prompt_tokens': cb.prompt_tokens,
+    #         'completion_tokens': cb.completion_tokens,
+    #         'total_cost_usd': cb.total_cost
+    #     }
+    # print("token2", tokens_info)
+    # print(result['answer'])
+    # print(result)
     return {
         'statusCode': 500,
     
